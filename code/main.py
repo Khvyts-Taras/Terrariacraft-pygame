@@ -73,7 +73,7 @@ tree = [[-1, -1, 8, -1, -1],
 		[-1, -1, 7, -1, -1],
 		[-1, -1, 7, -1, -1]]
 
-tree_center = [5, 2]
+tree_center = [2, 5]
 
 num_trees = 70
 for i in range(num_trees):
@@ -82,12 +82,12 @@ for i in range(num_trees):
 
 	for sy in range(len(tree)):
 		for sx in range(len(tree[0])):
-			px = x + sx
-			py = y + sy
+			px = x + sx - tree_center[0]
+			py = y + sy - tree_center[1]
 
 			if 0 <= px < world_size[0] and 0 <= py < world_size[1]:
 				if tree[sy][sx] != -1:
-					world[py - tree_center[0]][px - tree_center[1]] = tree[sy][sx]
+					world[py][px] = tree[sy][sx]
 
 
 
@@ -179,6 +179,25 @@ class Object:
 				self.vy = 0
 
 
+		if self.x < 0:
+			self.x = 0
+			self.vx = 0
+
+		if self.x > world_size[0]*block_size-self.w:
+			self.x = world_size[0]*block_size-self.w
+			self.vx = 0
+
+		if self.y < 0:
+			self.y = 0
+			self.vy = 0
+
+		if self.y > world_size[1]*block_size-self.h:
+			self.y = world_size[1]*block_size-self.h
+			self.vy = 0
+
+
+
+
 	def render(self):
 		pygame.draw.rect(screen, (255, 50, 50), (self.x - cam_x, self.y - cam_y, self.w, self.h))
 
@@ -210,10 +229,51 @@ while 1:
 			exit()
 		if event.type == pygame.KEYDOWN:
 			if event.key == pygame.K_w:
-				player.vy = -7
+				ground_check = [player.x, player.y+player.h, player.w, 1]
+
+				start_x, start_y, start_in_world = point_to_block(ground_check[0], ground_check[1])
+				end_x, end_y, end_in_world = point_to_block(ground_check[0]+ground_check[2], ground_check[1]+ground_check[3])
+
+				if start_in_world or end_in_world:
+					for y in range(start_y, end_y+1):
+						for x in range(start_x, end_x+1):
+							if block_properties[world[y][x]][0]:
+								if on_collision(ground_check, [x*block_size, y*block_size, block_size, block_size]):
+									player.vy = -7
+
+			if event.key == pygame.K_q:
+				with open('world1.dat', 'w') as file:
+					player_data = f'{int(player.x)} {int(player.y)}' + '\n'
+					inventory_data = ' '.join([str(inventory[i]) for i in range(len(inventory))]) + '\n'
+					world_data = ' '.join([str(world[y][x]) for y in range(world_size[1]) for x in range(world_size[0])]) + '\n'
+
+					file.write(player_data+inventory_data+world_data)
+			if event.key == pygame.K_e:
+				with open('world1.dat', 'r') as file:
+					data = file.readlines()
+
+					player.x, player.y = list(map(int, data[0].strip().split()))
+					inventory = list(map(int, data[1].strip().split()))
+
+					world_data = list(map(int, data[2].strip().split()))
+
+					for y in range(world_size[1]):
+						for x in range(world_size[0]):
+							world[y][x] = world_data[y*world_size[0]+x]
+
+
+
+
+
+
+
+
+
+
 		if event.type == pygame.MOUSEBUTTONDOWN:
 			if event.button == 1:
 				break_timer = time
+
 		if event.type == pygame.MOUSEWHEEL:
 			current_slot = (current_slot - event.y)%8
 
@@ -286,8 +346,9 @@ while 1:
 				inventory[current_slot] = world[by][bx]
 
 	if pygame.mouse.get_pressed()[2] and in_world:
-		if world[by][bx] == 0:
-			world[by][bx] = current_block
+		if not on_collision([player.x, player.y, player.w, player.h], [bx*block_size, by*block_size, block_size, block_size]) or not block_properties[current_block][0]:
+			if world[by][bx] == 0:
+				world[by][bx] = current_block
 
 	last_bx, last_by = bx, by
 
@@ -300,7 +361,7 @@ while 1:
 
 	create_gradient(screen, (66, 135, 245), (151, 201, 240), 30)
 	render_world()
-	player.render()
+	
 
 
 	if pygame.mouse.get_pressed()[0]:
@@ -308,7 +369,7 @@ while 1:
 			progress = min((time - break_timer)/block_properties[world[by][bx]][1], 1)
 			pygame.draw.rect(screen, (50, 50, 50), (bx*block_size - cam_x, by*block_size - cam_y, progress*block_size, block_size))
 
-
+	player.render()
 
 	slot_size = 20
 	for i in range(len(inventory)):
